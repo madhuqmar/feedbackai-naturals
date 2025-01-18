@@ -336,7 +336,7 @@ def main():
 
     #### Filtered Table ####
     st.header("Customer Google Reviews")
-    st.dataframe(filtered_df)
+    st.dataframe(filtered_df[["username", "full_location", "caption", "rating", "review_date"]])
     # st.dataframe(filtered_df["caption"])
 
 
