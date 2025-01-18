@@ -48,19 +48,24 @@ def run_scraper():
         print(f"Error running the scraper: {e}")
 
 
-def load_data(file_path):
+def load_data(file_path, columns=None):
     """
-    Load the CSV file into a DataFrame.
+    Load the CSV file into a DataFrame, selecting specific columns to optimize memory usage.
 
     Parameters:
         file_path (str): Path to the CSV file.
+        columns (list, optional): List of column names to read. Defaults to None (reads all columns).
 
     Returns:
         pd.DataFrame: Loaded DataFrame or empty DataFrame on failure.
     """
     try:
-        df = pd.read_csv(file_path)
+        if columns:
+            df = pd.read_csv(file_path, usecols=columns)
+        else:
+            df = pd.read_csv(file_path)  # Load all columns if none are specified
         return df
     except Exception as e:
         print(f"Error loading data: {e}")
         return pd.DataFrame()
+

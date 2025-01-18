@@ -51,23 +51,26 @@ def main():
 
     # Load data from specified location
     file_path_1 = "data/naturals_chennai_locations_metadata.csv"
-    ratings_df = load_data(file_path_1)
+    columns_to_load_1 = ["Place ID", "Area", "Name", "City", "Rating", "Total Reviews"]  # Replace with actual column names you need
+    ratings_df = load_data(file_path_1, columns=columns_to_load_1)
     ratings_df.rename(columns={"Place ID": "place_id"}, inplace=True)
 
     file_path_2 = "data/data/newest_gm_reviews_2025-01-16.csv"
-    reviews_df = load_data(file_path_2)
+    columns_to_load_2 = ["id_review", "caption", "review_date", "rating", "username", "place_id"]
+    reviews_df = load_data(file_path_2, columns=columns_to_load_2)
     last_date = get_last_scraping_date(file_path_2)
 
     file_path_3 = "data/naturals_sentiments.csv"
-    sentiments_df = load_data(file_path_3)
-    sentiments_df = sentiments_df[["id_review", "place_id", "username", "review_date", "sentiment"]]
+    columns_to_load_3 = ["id_review", "caption", "review_date", "rating", "username", "place_id"]
+    sentiments_df = load_data(file_path_3, columns=columns_to_load_3)
+    sentiments_df = sentiments_df[["id_review", "sentiment"]]
 
     print("Ratings DF Columns:", ratings_df.columns)
     print("Reviews DF Columns:", reviews_df.columns)
     print("Sentiments DF Columns:", sentiments_df.columns)
 
     df = pd.merge(ratings_df, reviews_df, on="place_id", how="left")
-    df = pd.merge(df, sentiments_df, on=["place_id", "id_review", "review_date",  "username"], how="left")
+    df = pd.merge(df, sentiments_df, on=["id_review"], how="left")
 
     df = df[df["caption"].notna()]
     df['full_location'] = df['Area'] + " " + df['Name']
