@@ -73,7 +73,6 @@ def main():
 
     df = df[df["caption"].notna()]
     df['full_location'] = df['Area'] + " " + df['Name']
-    df = df.drop(columns=["Unnamed: 0"])
 
     if not ratings_df.empty and not reviews_df.empty and not sentiments_df.empty:
         st.success("Data loaded successfully!")
