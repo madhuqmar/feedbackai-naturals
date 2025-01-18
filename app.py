@@ -61,9 +61,8 @@ def main():
     last_date = get_last_scraping_date(file_path_2)
 
     file_path_3 = "data/naturals_sentiments.csv"
-    columns_to_load_3 = ["id_review", "caption", "review_date", "rating", "username", "place_id"]
+    columns_to_load_3 = ["id_review", "sentiment"]
     sentiments_df = load_data(file_path_3, columns=columns_to_load_3)
-    sentiments_df = sentiments_df[["id_review", "sentiment"]]
 
     print("Ratings DF Columns:", ratings_df.columns)
     print("Reviews DF Columns:", reviews_df.columns)
