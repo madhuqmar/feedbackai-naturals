@@ -60,21 +60,17 @@ def main():
     reviews_df = load_data(file_path_2, columns=columns_to_load_2)
     last_date = get_last_scraping_date(file_path_2)
 
-    file_path_3 = "data/naturals_sentiments.csv"
-    columns_to_load_3 = ["id_review", "sentiment"]
-    sentiments_df = load_data(file_path_3, columns=columns_to_load_3)
-
-    print("Ratings DF Columns:", ratings_df.columns)
-    print("Reviews DF Columns:", reviews_df.columns)
-    print("Sentiments DF Columns:", sentiments_df.columns)
+    # file_path_3 = "data/naturals_sentiments.csv"
+    # columns_to_load_3 = ["id_review", "sentiment"]
+    # sentiments_df = load_data(file_path_3, columns=columns_to_load_3)
 
     df = pd.merge(ratings_df, reviews_df, on="place_id", how="left")
-    df = pd.merge(df, sentiments_df, on=["id_review"], how="left")
+    # df = pd.merge(df, sentiments_df, on=["id_review"], how="left")
 
     df = df[df["caption"].notna()]
     df['full_location'] = df['Area'] + " " + df['Name']
 
-    if not ratings_df.empty and not reviews_df.empty and not sentiments_df.empty:
+    if not ratings_df.empty and not reviews_df.empty:
         st.success("Data loaded successfully!")
     else:
         st.warning("The file is empty or has an unexpected format. Please check the file.")
