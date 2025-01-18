@@ -62,6 +62,10 @@ def main():
     sentiments_df = load_data(file_path_3)
     sentiments_df = sentiments_df[["id_review", "place_id", "username", "review_date", "sentiment"]]
 
+    print("Ratings DF Columns:", ratings_df.columns)
+    print("Reviews DF Columns:", reviews_df.columns)
+    print("Sentiments DF Columns:", sentiments_df.columns)
+
     df = pd.merge(ratings_df, reviews_df, on="place_id", how="left")
     df = pd.merge(df, sentiments_df, on=["place_id", "id_review", "review_date",  "username"], how="left")
 
