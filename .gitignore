@@ -1,3 +1,8 @@
 
 .idea/*
 experimentation/
+.env
+logs/
+.ipynb_checkpoints
+pipeline/
+__pycache__/*

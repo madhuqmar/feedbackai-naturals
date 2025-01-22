@@ -51,8 +51,9 @@ def main():
 
     # Load data from specified location
     file_path_1 = "data/naturals_chennai_locations_metadata.csv"
-    columns_to_load_1 = ["Place ID", "Area", "Name", "City", "Rating", "Total Reviews"]  # Replace with actual column names you need
+    columns_to_load_1 = ["Place ID", "City Area", "Area", "Name", "City", "Rating", "Total Reviews", "Address"]  # Replace with actual column names you need
     ratings_df = load_data(file_path_1, columns=columns_to_load_1)
+    ratings_df = load_data(file_path_1)
     ratings_df.rename(columns={"Place ID": "place_id"}, inplace=True)
 
     file_path_2 = "data/data/newest_gm_reviews_2025-01-16.csv"
@@ -161,20 +162,28 @@ def main():
     # Location filter with "All" option
 
     # City and City Area Filters
-    city = st.sidebar.selectbox("Select City", options=["All"] + list(df['City'].dropna().unique()))
+    selected_city = st.sidebar.selectbox("Select City", options=["All"] + list(df['City'].dropna().unique()))
 
-    city_area = st.sidebar.selectbox(
+    selected_city_area = st.sidebar.selectbox(
         "Select City Area",
-        options=["All"] + list(df['Area'].dropna().unique()),
+        options=["All"] + list(df['City Area'].dropna().unique()),
         key="city_area_selectbox"
     )
     selected_location = st.sidebar.selectbox("Select a Naturals Location",
                                              options=["All"] + list(df['full_location'].unique()))
 
+
+
     # APPLY FILTERS
     filtered_df = df.copy()
     # Ensure 'review_date' is in datetime64[ns]
     filtered_df['review_date'] = pd.to_datetime(filtered_df['review_date'], errors='coerce')
+
+    if selected_city != "All":
+        filtered_df = filtered_df.loc[filtered_df['City'] == selected_city]
+
+    if selected_city_area != "All":
+        filtered_df = filtered_df.loc[filtered_df['City Area'] == selected_city_area]
 
     # Convert 'selected_timeline' to datetime64[ns]
     if selected_timeline:
@@ -186,7 +195,7 @@ def main():
     # Filtering Logic
     # Apply timeline filter
     if selected_timeline_label == "All":
-        filtered_df = df.copy()  # No date filter, show all data
+        filtered_df = filtered_df # No date filter, show all data
     elif selected_timeline_label == "Custom Range":
         start_date = pd.to_datetime(st.sidebar.date_input("Start Date", value=today))
         end_date = pd.to_datetime(st.sidebar.date_input("End Date", value=today))
@@ -336,8 +345,7 @@ def main():
 
     #### Filtered Table ####
     st.header("Customer Google Reviews")
-    st.dataframe(filtered_df[["username", "full_location", "caption", "rating", "review_date"]])
-    # st.dataframe(filtered_df["caption"])
+    st.dataframe(filtered_df[["review_date", "username", "caption", "rating", "City", "City Area", "Area", "Name", "Address"]])
 
 
 
