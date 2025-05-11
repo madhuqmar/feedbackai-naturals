@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 import plotly.express as px
 import os
-from app_utils import get_last_scraping_date, load_data, run_scraper
+from app_utils import get_last_scraping_date, load_data, run_scraper, load_csv_from_s3
 
 import psutil
 
@@ -56,10 +56,18 @@ def main():
     ratings_df = load_data(file_path_1)
     ratings_df.rename(columns={"Place ID": "place_id"}, inplace=True)
 
-    file_path_2 = "data/data/newest_gm_reviews_2025-01-16.csv"
+    # file_path_2 = "data/data/newest_gm_reviews_2025-01-16.csv"
+    # columns_to_load_2 = ["id_review", "caption", "review_date", "rating", "username", "place_id"]
+    # reviews_df = load_data(file_path_2, columns=columns_to_load_2)
+    # last_date = get_last_scraping_date(file_path_2)
+
+    bucket = 'naturals-reviews'
+    key = 'place/newest_gm_reviews_2025-01-16.csv'
     columns_to_load_2 = ["id_review", "caption", "review_date", "rating", "username", "place_id"]
-    reviews_df = load_data(file_path_2, columns=columns_to_load_2)
-    last_date = get_last_scraping_date(file_path_2)
+
+    reviews_df = load_csv_from_s3(bucket, key, columns=columns_to_load_2)
+    last_date = reviews_df['review_date'].max()
+
 
     # file_path_3 = "data/naturals_sentiments.csv"
     # columns_to_load_3 = ["id_review", "sentiment"]
@@ -107,11 +115,11 @@ def main():
     # Create two columns
     scrape1, scrape2 = st.columns([1, 9])
 
-    # Add a button to trigger the scraper in the first column
-    with scrape1:
-        if st.button("Run Scraper Now", type="primary"):
-            with st.spinner("Scraping in progress..."):
-                run_scraper()
+    # # Add a button to trigger the scraper in the first column
+    # with scrape1:
+    #     if st.button("Run Scraper Now", type="primary"):
+    #         with st.spinner("Scraping in progress..."):
+    #             run_scraper()
 
     # Display the last scraped date in the second column
     with scrape2:

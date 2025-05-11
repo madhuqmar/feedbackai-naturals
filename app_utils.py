@@ -1,5 +1,16 @@
 import pandas as pd
 import os
+import boto3
+import io
+
+def load_csv_from_s3(bucket, key, columns=None):
+    s3 = boto3.client("s3")
+    response = s3.get_object(Bucket=bucket, Key=key)
+    df = pd.read_csv(io.StringIO(response['Body'].read().decode('utf-8')))
+    if columns:
+        df = df[columns]
+    return df
+
 
 def get_last_scraping_date(data_path):
     """
