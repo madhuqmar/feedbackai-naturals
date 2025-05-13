@@ -69,6 +69,9 @@ def main():
     reviews_df['review_date'] = pd.to_datetime(reviews_df['review_date'], errors='coerce')
     last_date = reviews_df['review_date'].max()
 
+    reviews_df['caption'] = reviews_df['caption'].fillna("No Review Available")
+
+
 
     # file_path_3 = "data/naturals_sentiments.csv"
     # columns_to_load_3 = ["id_review", "sentiment"]
