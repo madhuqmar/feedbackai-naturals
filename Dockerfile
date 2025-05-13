@@ -8,7 +8,7 @@ WORKDIR /app
 COPY . /app
 
 # Install dependencies
-RUN pip install --no-cache-dir streamlit pandas boto3 plotly
+RUN pip3 install --no-cache-dir streamlit pandas boto3 plotly
 
 # Expose Streamlit port
 EXPOSE 8501
