@@ -1,30 +1,52 @@
 import pandas as pd
 import os
 import boto3
+import botocore
 import io
 import streamlit as st
 
+# def load_csv_from_s3(bucket, key, columns=None):
+#     # Read secrets from Streamlit secrets
+#     # aws_access_key_id = st.secrets["AWS_ACCESS_KEY_ID"]
+#     # aws_secret_access_key = st.secrets["AWS_SECRET_ACCESS_KEY"]
+#     # region_name = st.secrets.get("AWS_DEFAULT_REGION", "us-east-1")
+
+#     # s3 = boto3.client(
+#     #     's3',
+#     #     aws_access_key_id=aws_access_key_id,
+#     #     aws_secret_access_key=aws_secret_access_key,
+#     #     region_name=region_name
+#     # )
+
+#     s3 = boto3.client("s3")
+
+#     try:
+#         response = s3.get_object(Bucket=bucket, Key=key)
+#         df = pd.read_csv(response['Body'], usecols=columns)
+#         return df
+#     except Exception as e:
+#         print(f"Error loading from S3: {e}")
+#         return pd.DataFrame()
+
 def load_csv_from_s3(bucket, key, columns=None):
-    # Read secrets from Streamlit secrets
-    # aws_access_key_id = st.secrets["AWS_ACCESS_KEY_ID"]
-    # aws_secret_access_key = st.secrets["AWS_SECRET_ACCESS_KEY"]
-    # region_name = st.secrets.get("AWS_DEFAULT_REGION", "us-east-1")
-
-    # s3 = boto3.client(
-    #     's3',
-    #     aws_access_key_id=aws_access_key_id,
-    #     aws_secret_access_key=aws_secret_access_key,
-    #     region_name=region_name
-    # )
-
     s3 = boto3.client("s3")
 
     try:
         response = s3.get_object(Bucket=bucket, Key=key)
         df = pd.read_csv(response['Body'], usecols=columns)
         return df
+
+    except botocore.exceptions.ClientError as e:
+        error_code = e.response['Error']['Code']
+        print(f"ClientError ({error_code}): {e}")
+        print("Bucket:", bucket)
+        print("Key:", key)
+        return pd.DataFrame()
+
     except Exception as e:
-        print(f"Error loading from S3: {e}")
+        print(f"General error loading from S3: {e}")
+        print("Bucket:", bucket)
+        print("Key:", key)
         return pd.DataFrame()
 
 
