@@ -29,7 +29,13 @@ import streamlit as st
 #         return pd.DataFrame()
 
 def load_csv_from_s3(bucket, key, columns=None):
-    s3 = boto3.client("s3")
+    
+    s3 = boto3.client(
+        's3',
+        aws_access_key_id="aws_access_key_id",
+        aws_secret_access_key="aws_secret_access_key",
+        region_name="region_name"
+    )
 
     try:
         response = s3.get_object(Bucket=bucket, Key=key)
