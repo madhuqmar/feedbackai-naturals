@@ -5,5 +5,5 @@ experimentation/
 logs/
 .ipynb_checkpoints
 pipeline/
-__pycache__/*.streamlit/secrets.toml
-.streamlit/secrets.toml
+# __pycache__/*.streamlit/secrets.toml
+# .streamlit/secrets.toml
