@@ -37,16 +37,18 @@ def load_csv_from_s3(bucket, key, columns=None):
         return df
 
     except botocore.exceptions.ClientError as e:
-        error_code = e.response['Error']['Code']
-        print(f"ClientError ({error_code}): {e}")
-        print("Bucket:", bucket)
-        print("Key:", key)
+        print("S3 ClientError:")
+        print("  Bucket:", bucket)
+        print("  Key:", key)
+        print("  Error Code:", e.response.get("Error", {}).get("Code"))
+        print("  Message:", e.response.get("Error", {}).get("Message"))
         return pd.DataFrame()
 
     except Exception as e:
-        print(f"General error loading from S3: {e}")
-        print("Bucket:", bucket)
-        print("Key:", key)
+        print("General Exception in load_csv_from_s3:")
+        print("  Bucket:", bucket)
+        print("  Key:", key)
+        print("  Error:", repr(e))
         return pd.DataFrame()
 
 
