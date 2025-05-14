@@ -62,7 +62,7 @@ def main():
     # last_date = get_last_scraping_date(file_path_2)
 
     bucket = 'naturals-reviews'
-    key = 'combined/all_4_naturals_reviews.csv'
+    key = 'combined/all_4_naturals_salons.csv'
     columns_to_load_2 = ["id_review", "caption", "review_date", "rating", "username", "place_id"]
 
     reviews_df = load_csv_from_s3(bucket, key, columns=columns_to_load_2)
