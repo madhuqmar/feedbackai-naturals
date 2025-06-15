@@ -116,24 +116,15 @@ def main():
         else:
             return "th"
 
-    # Create two columns
-    scrape1, scrape2 = st.columns([1, 9])
 
-    # # Add a button to trigger the scraper in the first column
-    # with scrape1:
-    #     if st.button("Run Scraper Now", type="primary"):
-    #         with st.spinner("Scraping in progress..."):
-    #             run_scraper()
+    if last_date:
+        day = last_date.day
+        day_suffix = get_day_suffix(day)
+        formatted_date = last_date.strftime(f"%B {day}{day_suffix} at %I %p").replace(" 0", " ")  # Remove leading 0
+        st.write(f"🔄 Data was last scraped on **{formatted_date}**")
+    else:
+        st.write("Could not retrieve the last scraping date.")
 
-    # Display the last scraped date in the second column
-    with scrape2:
-        if last_date:
-            day = last_date.day
-            day_suffix = get_day_suffix(day)
-            formatted_date = last_date.strftime(f"%B {day}{day_suffix} at %I %p").replace(" 0", " ")  # Remove leading 0
-            st.write(f"Data was last scraped on **{formatted_date}**")
-        else:
-            st.write("Could not retrieve the last scraping date.")
 
     #### FILTERS ####
     st.sidebar.header("Filters")
