@@ -174,16 +174,46 @@ def main():
     # Location filter with "All" option
 
     # City and City Area Filters
-    selected_city = st.sidebar.selectbox("Select City", options=["All"] + list(df['City'].dropna().unique()))
+    # selected_city = st.sidebar.selectbox("Select City", options=["All"] + list(df['City'].dropna().unique()))
+
+    # selected_city_area = st.sidebar.selectbox(
+    #     "Select City Area",
+    #     options=["All"] + list(df['City Area'].dropna().unique()),
+    #     key="city_area_selectbox"
+    # )
+    # selected_location = st.sidebar.selectbox("Select a Naturals Location",
+    #                                          options=["All"] + list(df['full_location'].unique()))
+
+    # Sidebar: City Filter
+    selected_city = st.sidebar.selectbox(
+        "Select City",
+        options=["All"] + sorted(df['City'].dropna().unique())
+    )
+
+    # Filter City Area options based on selected City
+    if selected_city != "All":
+        filtered_city_areas = df[df['City'] == selected_city]['City Area'].dropna().unique()
+    else:
+        filtered_city_areas = df['City Area'].dropna().unique()
 
     selected_city_area = st.sidebar.selectbox(
         "Select City Area",
-        options=["All"] + list(df['City Area'].dropna().unique()),
+        options=["All"] + sorted(filtered_city_areas),
         key="city_area_selectbox"
     )
-    selected_location = st.sidebar.selectbox("Select a Naturals Location",
-                                             options=["All"] + list(df['full_location'].unique()))
 
+    # Filter Naturals Locations based on selected City Area
+    if selected_city_area != "All":
+        filtered_locations = df[df['City Area'] == selected_city_area]['full_location'].dropna().unique()
+    elif selected_city != "All":
+        filtered_locations = df[df['City'] == selected_city]['full_location'].dropna().unique()
+    else:
+        filtered_locations = df['full_location'].dropna().unique()
+
+    selected_location = st.sidebar.selectbox(
+        "Select a Naturals Location",
+        options=["All"] + sorted(filtered_locations)
+    )
 
 
     # APPLY FILTERS
@@ -355,9 +385,22 @@ def main():
     else:
         st.warning("No data available for the selected timeline to display the rating trend.")
 
+    filtered_df['review_date'] = pd.to_datetime(filtered_df['review_date'], errors='coerce')
+    filtered_df['review_date'] = filtered_df['review_date'].dt.strftime('%d-%b-%y')
+
+    filtered_df = filtered_df.rename(columns={
+                            "caption": "Review",
+                            "review_date": "Review Date",
+                            "username": "User Name",
+                            "rating": "Rating ",
+                            "id_review": "Review ID",
+                            "Name": "Salon Name"
+                            })
+
+
     #### Filtered Table ####
     st.header("Customer Google Reviews")
-    st.dataframe(filtered_df[["review_date", "username", "caption", "rating", "City", "City Area", "Area", "Name", "Address"]])
+    st.dataframe(filtered_df[["Review ID", "Review Date", "Review", "Rating ", "User Name", "City", "Area", "Salon Name"]])
 
 
 
