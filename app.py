@@ -4,9 +4,8 @@ from datetime import datetime, timedelta
 import plotly.express as px
 import os
 from app_utils import get_last_scraping_date, load_data, run_scraper, load_csv_from_s3
-
+from utils.st_paywall.aggregate_auth import add_auth
 import psutil
-
 
 
 ### APP HEADERS ###
@@ -28,7 +27,7 @@ col1, col2, col3 = st.columns([4, 1, 1])
 
 # Add title to the left column
 with col1:
-    st.title("Customer FeedbackAI")
+    st.title("Google Reviews FeedbackAI")
     st.write(
         """
         FeedbackAI is a data and AI-driven platform designed to provide actionable insights
@@ -83,10 +82,15 @@ def main():
     df = df[df["caption"].notna()]
     df['full_location'] = df['Area'] + " " + df['Name']
 
+    cols = st.columns(2)
     if not ratings_df.empty and not reviews_df.empty:
-        st.success("Data loaded successfully!")
+        cols[0].success("Data loaded successfully!")
     else:
-        st.warning("The file is empty or has an unexpected format. Please check the file.")
+        cols[0].warning("The file is empty or has an unexpected format. Please check the file.")
+
+        # Show Stripe Subscribe button + handle subscriber gate
+    with cols[1]:
+        add_auth(required=False, show_redirect_button=True, use_sidebar=False)
 
     # Helper function to get the day suffix (st, nd, rd, th)
     def get_day_suffix(day):

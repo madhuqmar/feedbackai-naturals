@@ -1,5 +1,5 @@
 
-.idea/*
+.idea/
 experimentation/
 .env
 logs/
@@ -7,4 +7,9 @@ logs/
 pipeline/
 # __pycache__/*.streamlit/secrets.toml
 # .streamlit/secrets.toml
-__pycache__/*
+__pycache__/
+*.pyc
+
+.venv/
+venv/
+experimentation/
