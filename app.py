@@ -163,12 +163,12 @@ def show_access_gate():
         </div>
     """, unsafe_allow_html=True)
     
-    # Add KRAM Solutions trademark at the bottom
+    # Add BGorgeous Solutions trademark at the bottom
     st.markdown("---")
     st.markdown("""
         <div style='text-align: center; padding: 1rem 0; color: #888; font-size: 0.9rem;'>
-            <p>© 2025 KRAM Solutions™. All rights reserved.</p>
-            <p style='font-size: 0.8rem; margin-top: 0.5rem;'>Powered by KRAM Solutions - Innovative AI & Data Analytics</p>
+            <p>© 2025 BGorgeous Solutions Private Limited™. All rights reserved.</p>
+            <p style='font-size: 0.8rem; margin-top: 0.5rem;'>Powered by BGorgeous Solutions - Innovative AI & Data Analytics</p>
         </div>
     """, unsafe_allow_html=True)
 
@@ -599,11 +599,11 @@ def main():
     st.header("Customer Google Reviews")
     st.dataframe(filtered_df[["Review ID", "Review Date", "Review", "Rating ", "User Name", "City", "Area", "Salon Name"]])
 
-    # Add KRAM Solutions trademark at the bottom of main app
+    # Add BGorgeousSolutions trademark at the bottom of main app
     st.markdown("---")
     st.markdown("""
         <div style='text-align: center; padding: 1rem 0; color: #888; font-size: 0.9rem;'>
-            <p>© 2025 KRAM Solutions™. All rights reserved.</p>
+            <p>© 2025 BGorgeous Solutions Private Limited™. All rights reserved.</p>
         </div>
     """, unsafe_allow_html=True)
 
