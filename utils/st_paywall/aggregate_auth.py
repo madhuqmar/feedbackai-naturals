@@ -7,8 +7,8 @@ payment_provider = st.secrets.get("payment_provider", "stripe")
 
 def add_auth(required: bool = True, 
              show_redirect_button: bool = True, 
-             subscription_button_text: str = 'Subscribe now!',
-             button_color: str = "#FD504D", 
+             subscription_button_text: str = "Subscribe",
+             button_color: str = "#34D57A", 
              use_sidebar: bool = True):
     """Add authentication and payment verification to a Streamlit app."""
     if required:
@@ -32,7 +32,7 @@ def is_subscriber(email: str) -> bool:
         raise ValueError("payment_provider must be 'stripe' or 'bmac'")
 
 
-def require_auth(show_redirect_button: bool = True, subscription_button_text: str = 'Subscribe now!', button_color: str = "#FD504D", use_sidebar: bool = True):
+def require_auth(show_redirect_button: bool = True, subscription_button_text: str = 'Subscribe', button_color: str = "#FD504D", use_sidebar: bool = True):
     """Require authentication and payment verification to proceed."""
     if not st.user.is_logged_in:
         st.stop()

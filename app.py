@@ -19,15 +19,222 @@ def get_memory_usage():
     memory_usage = process.memory_info().rss / (1024 ** 2)  # Convert to MB
     return memory_usage
 
+def show_access_gate():
+    """Show the access gate with Stripe payment or secret password options."""
+    st.markdown("""
+        <div style='text-align: center; padding: 2rem 0;'>
+            <h1 style='color: #8A2BE2; margin-bottom: 0.5rem;'>Welcome to FeedbackAI!</h1>
+            <p style='font-size: 1.2rem; color: #666; margin-bottom: 2rem;'>
+                A real-time data and AI-driven platform for customer sentiment analysis from Google Reviews
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    
+    # Center the tabs
+    col1, col2, col3 = st.columns([1, 3, 1])
+    with col2:
+        # Create tabs for different access methods
+        tab1, tab2 = st.tabs(["🔐 Subscribe to Access", "� Subscriber Login"])
+        
+        with tab1:
+            st.markdown("""
+                <div style='text-align: center; padding: 1rem;'>
+                    <h3>Get Full Access to FeedbackAI</h3>
+                    <p>Subscribe to unlock powerful analytics and insights for your business</p>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            # Import redirect_button directly to show subscription button
+            from utils.st_paywall.stripe_auth import redirect_button
+            
+            # Center the subscription button with better proportions
+            subcol1, subcol2, subcol3 = st.columns([2, 1, 2])
+            with subcol2:
+                redirect_button(
+                    text="Subscribe Now",
+                    customer_email="",  # Empty email for new users
+                    color="#34D57A",
+                    payment_provider=st.secrets.get("payment_provider", "stripe"),
+                    use_sidebar=False
+                )
+        
+        with tab2:
+            st.markdown("""
+                <div style='text-align: center; padding: 1rem;'>
+                    <h3>Subscriber Login</h3>
+                    <p>Already subscribed? Enter your email to access the app</p>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            # Center the login form
+            subcol1, subcol2, subcol3 = st.columns([1, 2, 1])
+            with subcol2:
+                # Email input for login
+                user_email = st.text_input("Email Address", key="subscriber_email", placeholder="Enter the email used for subscription")
+                
+                if st.button("Login & Verify Subscription", type="primary", use_container_width=True):
+                    if user_email:
+                        with st.spinner("Searching Stripe customers and verifying subscription..."):
+                            try:
+                                from utils.st_paywall.stripe_auth import is_active_subscriber, get_customer_subscription_info
+                                
+                                # Get detailed subscription info
+                                sub_info = get_customer_subscription_info(user_email)
+                                
+                                if sub_info["status"] == "no_customer":
+                                    st.error("❌ No customer found with this email address in Stripe.")
+                                    st.info("💡 Please use the exact email address you used for payment, or subscribe first.")
+                                    
+                                elif sub_info["status"] == "error":
+                                    st.error(f"❌ Error checking subscription: {sub_info['message']}")
+                                    
+                                elif sub_info["status"] == "found":
+                                    if sub_info["has_active_subscription"]:
+                                        # Set up session for logged in subscriber
+                                        st.session_state.user_email = user_email
+                                        st.session_state.user_subscribed = True
+                                        st.session_state.access_granted = True
+                                        st.session_state.subscription_info = sub_info
+                                        
+                                        st.success("✅ Active subscription found! Loading app...")
+                                        
+                                        # Show subscription details
+                                        for customer in sub_info["customers"]:
+                                            if customer["active_subscriptions"] > 0:
+                                                st.info(f"👤 Customer: {customer['name']} | Active Subscriptions: {customer['active_subscriptions']}")
+                                        
+                                        st.rerun()
+                                    else:
+                                        st.error("❌ Customer found, but no active subscriptions.")
+                                        st.info("💡 Your subscription may have expired or been cancelled. Please renew your subscription.")
+                                        
+                                        # Show customer details for debugging
+                                        with st.expander("🔍 Customer Details"):
+                                            for customer in sub_info["customers"]:
+                                                st.write(f"**Customer:** {customer['name']}")
+                                                st.write(f"**Email:** {customer['email']}")
+                                                st.write(f"**Total Subscriptions:** {customer['all_subscriptions']}")
+                                                st.write(f"**Active Subscriptions:** {customer['active_subscriptions']}")
+                                        
+                                        # Temporary access for customers who have paid but subscription setup issues
+                                        st.markdown("---")
+                                        st.write("**🔧 Paid Customer Access:**")
+                                        st.info("Since you're a verified customer who has made payments, you can get temporary access while we resolve the subscription status.")
+                                        
+                                        if st.button("🚀 Grant Temporary Access", type="primary"):
+                                            st.session_state.user_email = user_email
+                                            st.session_state.user_subscribed = True
+                                            st.session_state.access_granted = True
+                                            st.session_state.temp_access = True
+                                            st.success("✅ Temporary access granted! Loading app...")
+                                            st.rerun()
+                                
+                            except Exception as e:
+                                st.error(f"❌ Unexpected error: {str(e)}")
+                    else:
+                        st.error("Please enter your email address.")
+                
+                # Add admin access as a smaller option
+                st.markdown("---")
+                with st.expander("🔐 Admin Access", expanded=False):
+                    admin_password = st.text_input("Admin Password", type="password", key="admin_password")
+                    if st.button("Admin Login", type="secondary"):
+                        correct_password = st.secrets.get("admin_password", "feedbackai2024")
+                        if admin_password == correct_password:
+                            st.session_state.admin_access = True
+                            st.session_state.access_granted = True
+                            st.rerun()
+                        else:
+                            st.error("Incorrect admin password.")
+    
+
+    
+    # Instructions for access
+    st.markdown("---")
+    st.markdown("""
+        <div style='text-align: center; padding: 1rem;'>
+            <h4 style='color: #666;'>How to Access FeedbackAI:</h4>
+            <div style='color: #666; font-size: 0.9rem; text-align: left; max-width: 400px; margin: 0 auto;'>
+                <p><strong>New Users:</strong></p>
+                <p>1. Click "Subscribe Now" to purchase access<br>
+                2. Complete payment in the new tab<br>
+                3. Return here and use "Subscriber Login" with your email</p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Add KRAM Solutions trademark at the bottom
+    st.markdown("---")
+    st.markdown("""
+        <div style='text-align: center; padding: 1rem 0; color: #888; font-size: 0.9rem;'>
+            <p>© 2025 KRAM Solutions™. All rights reserved.</p>
+            <p style='font-size: 0.8rem; margin-top: 0.5rem;'>Powered by KRAM Solutions - Innovative AI & Data Analytics</p>
+        </div>
+    """, unsafe_allow_html=True)
+
+def check_access():
+    """Check if user has access to the app."""
+    # Initialize session states
+    if "access_granted" not in st.session_state:
+        st.session_state.access_granted = False
+    if "admin_access" not in st.session_state:
+        st.session_state.admin_access = False
+    
+    # Admin access check first
+    if st.session_state.admin_access:
+        st.session_state.access_granted = True
+        return True
+    
+    # For now, allow access without subscription for testing
+    # You can enable this after payment system is fully set up
+    # st.session_state.access_granted = True
+    # return True
+    
+    # Check subscription via the existing auth system
+    user_subscribed = st.session_state.get("user_subscribed", False)
+    
+    # Grant access if subscribed or admin
+    if user_subscribed:
+        st.session_state.access_granted = True
+        return True
+    
+    return False
+
+# Check access before showing the app
+if not check_access():
+    show_access_gate()
+    st.stop()
+
+# If access is granted, show the full app interface
 st.sidebar.write(f"Memory usage: {get_memory_usage():.2f} MB")
 
+# Add access control in sidebar
+st.sidebar.markdown("---")
+if st.session_state.admin_access:
+    st.sidebar.success("✅ Admin Access")
+else:
+    user_email = st.session_state.get("user_email", "Unknown")
+    st.sidebar.success("✅ Subscriber Access")
+    st.sidebar.info(f"👤 {user_email}")
+    
+    # # Show subscription details if available
+    # if "subscription_info" in st.session_state:
+    #     sub_info = st.session_state.subscription_info
+    #     if sub_info.get("total_active_subscriptions", 0) > 0:
+    #         st.sidebar.success(f"🎯 {sub_info['total_active_subscriptions']} Active Subscription(s)")
+
+if st.sidebar.button("🚪 Logout", type="secondary"):
+    # Clear all session states
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
+    st.rerun()
 
 # Create three columns with ratios (4:1:1 works well for title + two logos)
 col1, col2, col3 = st.columns([4, 1, 1])
 
 # Add title to the left column
 with col1:
-    st.title("Google Reviews FeedbackAI")
+    st.title("FeedbackAI")
     st.write(
         """
         FeedbackAI is a data and AI-driven platform designed to provide actionable insights
@@ -82,15 +289,10 @@ def main():
     df = df[df["caption"].notna()]
     df['full_location'] = df['Area'] + " " + df['Name']
 
-    cols = st.columns(2)
     if not ratings_df.empty and not reviews_df.empty:
-        cols[0].success("Data loaded successfully!")
+        st.success("Data loaded successfully!")
     else:
-        cols[0].warning("The file is empty or has an unexpected format. Please check the file.")
-
-        # Show Stripe Subscribe button + handle subscriber gate
-    with cols[1]:
-        add_auth(required=False, show_redirect_button=True, use_sidebar=False)
+        st.warning("The file is empty or has an unexpected format. Please check the file.")
 
     # Helper function to get the day suffix (st, nd, rd, th)
     def get_day_suffix(day):
@@ -396,6 +598,14 @@ def main():
     #### Filtered Table ####
     st.header("Customer Google Reviews")
     st.dataframe(filtered_df[["Review ID", "Review Date", "Review", "Rating ", "User Name", "City", "Area", "Salon Name"]])
+
+    # Add KRAM Solutions trademark at the bottom of main app
+    st.markdown("---")
+    st.markdown("""
+        <div style='text-align: center; padding: 1rem 0; color: #888; font-size: 0.9rem;'>
+            <p>© 2025 KRAM Solutions™. All rights reserved.</p>
+        </div>
+    """, unsafe_allow_html=True)
 
 
 

@@ -59,7 +59,7 @@ def redirect_button(
             transition: background-color 0.2s ease, transform 0.1s ease;
             {width_style}
             margin-bottom: 0.5rem;">
-            {text}a
+            {text}
         </div>
     </a>
     """
@@ -71,14 +71,76 @@ def redirect_button(
 
 
 def is_active_subscriber(email: str) -> bool:
-    stripe.api_key = get_api_key()
-    customers = stripe.Customer.list(email=email)
+    """Check if email has active subscription by querying Stripe customers and subscriptions."""
     try:
-        customer = customers.data[0]
-    except IndexError:
+        stripe.api_key = get_api_key()
+        
+        # Search for customers with this email
+        customers = stripe.Customer.list(email=email, limit=10)
+        
+        if not customers.data:
+            return False
+        
+        # Check each customer for active subscriptions
+        for customer in customers.data:
+            # Get all subscriptions for this customer
+            subscriptions = stripe.Subscription.list(
+                customer=customer.id,
+                status='active',  # Only get active subscriptions
+                limit=10
+            )
+            
+            # If any active subscriptions found, user is subscribed
+            if subscriptions.data:
+                # Store subscription info for debugging
+                st.session_state.subscriptions = subscriptions.data
+                st.session_state.customer_info = customer
+                return True
+        
+        return False
+        
+    except Exception as e:
+        st.error(f"Error checking subscription: {str(e)}")
         return False
 
-    subscriptions = stripe.Subscription.list(customer=customer["id"])
-    st.session_state.subscriptions = subscriptions
 
-    return len(subscriptions) > 0
+def get_customer_subscription_info(email: str) -> dict:
+    """Get detailed subscription information for a customer."""
+    try:
+        stripe.api_key = get_api_key()
+        
+        # Search for customers with this email
+        customers = stripe.Customer.list(email=email, limit=10)
+        
+        if not customers.data:
+            return {"status": "no_customer", "message": "No customer found with this email"}
+        
+        customer_info = []
+        total_subscriptions = 0
+        
+        for customer in customers.data:
+            # Get all subscriptions for this customer (including inactive ones)
+            subscriptions = stripe.Subscription.list(customer=customer.id, limit=10)
+            
+            active_subs = [sub for sub in subscriptions.data if sub.status == 'active']
+            total_subscriptions += len(active_subs)
+            
+            customer_info.append({
+                "customer_id": customer.id,
+                "email": customer.email,
+                "name": customer.name or "No name",
+                "created": customer.created,
+                "active_subscriptions": len(active_subs),
+                "all_subscriptions": len(subscriptions.data),
+                "subscriptions": active_subs
+            })
+        
+        return {
+            "status": "found",
+            "total_active_subscriptions": total_subscriptions,
+            "customers": customer_info,
+            "has_active_subscription": total_subscriptions > 0
+        }
+        
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
