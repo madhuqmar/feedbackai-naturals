@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 import plotly.express as px
 import os
-from app_utils import get_last_scraping_date, load_data, run_scraper, load_csv_from_s3
+from app_utils import get_last_scraping_date, load_data, run_scraper, load_csv_from_s3, analyze_sentiment, calculate_overall_sentiment_score, get_sentiment_distribution, analyze_sentiments_batch
 from utils.st_paywall.aggregate_auth import add_auth
 import psutil
 
@@ -35,7 +35,7 @@ def show_access_gate():
     col1, col2, col3 = st.columns([1, 3, 1])
     with col2:
         # Create tabs for different access methods
-        tab1, tab2 = st.tabs(["🔐 Subscribe to Access", "� Subscriber Login"])
+        tab1, tab2 = st.tabs(["🔐 Subscribe to Access", "👤 Subscriber Login"])
         
         with tab1:
             st.markdown("""
@@ -205,11 +205,11 @@ if not check_access():
     show_access_gate()
     st.stop()
 
-# If access is granted, show the full app interface
-st.sidebar.write(f"Memory usage: {get_memory_usage():.2f} MB")
+# # If access is granted, show the full app interface
+# st.sidebar.write(f"Memory usage: {get_memory_usage():.2f} MB")
 
-# Add access control in sidebar
-st.sidebar.markdown("---")
+# # Add access control in sidebar
+
 if st.session_state.admin_access:
     st.sidebar.success("✅ Admin Access")
 else:
@@ -228,6 +228,8 @@ if st.sidebar.button("🚪 Logout", type="secondary"):
     for key in list(st.session_state.keys()):
         del st.session_state[key]
     st.rerun()
+
+st.sidebar.markdown("---")
 
 # Create three columns with ratios (4:1:1 works well for title + two logos)
 col1, col2, col3 = st.columns([4, 1, 1])
@@ -262,11 +264,6 @@ def main():
     ratings_df = load_data(file_path_1)
     ratings_df.rename(columns={"Place ID": "place_id"}, inplace=True)
 
-    # file_path_2 = "data/data/newest_gm_reviews_2025-01-16.csv"
-    # columns_to_load_2 = ["id_review", "caption", "review_date", "rating", "username", "place_id"]
-    # reviews_df = load_data(file_path_2, columns=columns_to_load_2)
-    # last_date = get_last_scraping_date(file_path_2)
-
     bucket = 'naturals-reviews'
     key = 'combined/all_4_naturals_salons.csv'
     columns_to_load_2 = ["id_review", "caption", "review_date", "rating", "username", "place_id"]
@@ -277,17 +274,57 @@ def main():
 
     reviews_df['caption'] = reviews_df['caption'].fillna("No Review Available")
 
-
-
-    # file_path_3 = "data/naturals_sentiments.csv"
-    # columns_to_load_3 = ["id_review", "sentiment"]
-    # sentiments_df = load_data(file_path_3, columns=columns_to_load_3)
-
     df = pd.merge(ratings_df, reviews_df, on="place_id", how="left")
     # df = pd.merge(df, sentiments_df, on=["id_review"], how="left")
 
     df = df[df["caption"].notna()]
     df['full_location'] = df['Area'] + " " + df['Name']
+
+    # Add sentiment analysis
+    st.info("🤖 Initializing AI-powered sentiment analysis using advanced transformer models...")
+    
+    with st.spinner("Loading AI sentiment analysis model (first-time setup may take 1-2 minutes)..."):
+        # Test if the AI model loads successfully
+        from app_utils import get_sentiment_analyzer
+        analyzer = get_sentiment_analyzer()
+        
+        if analyzer is not None:
+            st.success("✅ AI sentiment model loaded successfully!")
+        else:
+            st.warning("⚠️ AI model unavailable, using rating-based fallback analysis.")
+    
+    # Progress bar for sentiment analysis
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    with st.spinner("Analyzing customer sentiment with AI for all reviews..."):
+        try:
+            # Use batch processing for better performance
+            status_text.text("Processing reviews with AI sentiment analysis...")
+            sentiment_categories, sentiment_scores, sentiment_emojis = analyze_sentiments_batch(
+                df, 'caption', 'rating', batch_size=16
+            )
+            
+            df['sentiment_category'] = sentiment_categories
+            df['sentiment_score'] = sentiment_scores
+            df['sentiment_emoji'] = sentiment_emojis
+            
+            progress_bar.progress(1.0)
+            status_text.text("AI sentiment analysis completed!")
+            
+        except Exception as e:
+            st.warning(f"Batch processing failed, using individual analysis: {str(e)}")
+            # Fallback to individual processing
+            sentiment_results = df.apply(lambda row: analyze_sentiment(row['caption'], row['rating']), axis=1)
+            df['sentiment_category'] = sentiment_results.apply(lambda x: x[0])
+            df['sentiment_score'] = sentiment_results.apply(lambda x: x[1])
+            df['sentiment_emoji'] = sentiment_results.apply(lambda x: x[2])
+    
+    # Clear progress indicators
+    progress_bar.empty()
+    status_text.empty()
+    
+    st.success("🎯 AI-powered sentiment analysis completed! Enhanced accuracy with deep learning models.")
 
     if not ratings_df.empty and not reviews_df.empty:
         st.success("Data loaded successfully!")
@@ -359,6 +396,16 @@ def main():
     selected_timeline_label = st.sidebar.selectbox("Select Timeline", options=list(timeline_options.keys()))
     selected_timeline = timeline_options[selected_timeline_label]
 
+    # Custom date range inputs (show only when Custom Range is selected)
+    start_date = None
+    end_date = None
+    if selected_timeline_label == "Custom Range":
+        start_date = st.sidebar.date_input("Start Date", value=today)
+        end_date = st.sidebar.date_input("End Date", value=today)
+        
+        if start_date > end_date:
+            st.sidebar.error("Start Date cannot be after End Date.")
+
     # Rating filter
     rating = st.sidebar.slider(
         "Select Rating",
@@ -366,6 +413,13 @@ def main():
         max_value=5,  # Maximum value for the slider
         value=0,  # Default value
         step=1  # Step size for the slider
+    )
+
+    # Sentiment filter
+    sentiment_options = ["All", "Very Positive", "Positive", "Neutral", "Negative", "Very Negative"]
+    selected_sentiment = st.sidebar.selectbox(
+        "Select Sentiment",
+        options=sentiment_options
     )
 
     # Location filter with "All" option
@@ -434,35 +488,38 @@ def main():
     # Filtering Logic
     # Apply timeline filter
     if selected_timeline_label == "All":
-        filtered_df = filtered_df # No date filter, show all data
+        # No date filter, show all data
+        pass  
     elif selected_timeline_label == "Custom Range":
-        start_date = pd.to_datetime(st.sidebar.date_input("Start Date", value=today))
-        end_date = pd.to_datetime(st.sidebar.date_input("End Date", value=today))
-        if start_date > end_date:
-            st.error("Start Date cannot be after End Date.")
-        else:
+        if start_date and end_date and start_date <= end_date:
+            # Convert dates to datetime and include the full end date (until 23:59:59)
+            start_datetime = pd.to_datetime(start_date)
+            end_datetime = pd.to_datetime(end_date) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
+            
             # Apply filter using datetime comparison
             filtered_df = filtered_df[
-                (filtered_df['review_date'] >= start_date) &
-                (filtered_df['review_date'] <= end_date)
-                ]
+                (filtered_df['review_date'] >= start_datetime) &
+                (filtered_df['review_date'] <= end_datetime)
+            ]
     else:
         if selected_timeline:
             # Apply filter using datetime comparison
             filtered_df = filtered_df[
                 (filtered_df['review_date'] >= selected_timeline[0]) &
                 (filtered_df['review_date'] <= selected_timeline[1])
-                ]
+            ]
 
     if rating > 0:
         filtered_df = filtered_df[filtered_df['rating'] == rating]
     if selected_location != "All":
         filtered_df = filtered_df[filtered_df['full_location'] == selected_location]
+    if selected_sentiment != "All":
+        filtered_df = filtered_df[filtered_df['sentiment_category'] == selected_sentiment]
 
     # #### Key Metrics ####
     st.header("Key Metrics")
     M1, M2 = st.columns(2)
-    m1, m2, m3 = M1.columns(3)
+    m1, m2, m3, m4 = M1.columns(4)
     l1, l2 = M2.columns(2)
 
     # Total number of locations
@@ -477,84 +534,150 @@ def main():
     total_reviews = filtered_df['caption'].notna().sum()
     m3.metric(label="Total Number of Reviews", value=total_reviews)
 
+    # Overall Sentiment Score
+    overall_sentiment_score = calculate_overall_sentiment_score(filtered_df)
+    sentiment_emoji = "😍" if overall_sentiment_score >= 4.5 else "😊" if overall_sentiment_score >= 3.5 else "😐" if overall_sentiment_score >= 2.5 else "😞" if overall_sentiment_score >= 1.5 else "😡"
+    m4.metric(label="🤖 AI Sentiment Score", value=f"{sentiment_emoji} {overall_sentiment_score}/5")
+
     if not filtered_df.empty:
         # Ensure 'review_date' is in datetime format
         filtered_df['review_date'] = pd.to_datetime(filtered_df['review_date'], errors='coerce')
 
-        # Group data by location and find start and end dates dynamically for each location
-        dynamic_dates = filtered_df.groupby('full_location')['review_date'].agg(['min', 'max']).reset_index()
-        dynamic_dates.columns = ['Location', 'Start_Date', 'End_Date']
+        # Calculate performance metrics for best/least rated locations
+        # Get the date range for the filtered data
+        min_date = filtered_df['review_date'].min()
+        max_date = filtered_df['review_date'].max()
+        
+        # Calculate midpoint to split the period
+        date_range = max_date - min_date
+        midpoint_date = min_date + (date_range / 2)
+        
+        # Split data into first half and second half periods
+        first_half = filtered_df[filtered_df['review_date'] <= midpoint_date]
+        second_half = filtered_df[filtered_df['review_date'] > midpoint_date]
+        
+        # Calculate average ratings for each location in both periods
+        location_performance = []
+        
+        for location in filtered_df['full_location'].unique():
+            location_data = filtered_df[filtered_df['full_location'] == location]
+            
+            # First half ratings
+            first_half_data = first_half[first_half['full_location'] == location]
+            first_half_rating = first_half_data['rating'].mean() if not first_half_data.empty else None
+            
+            # Second half ratings  
+            second_half_data = second_half[second_half['full_location'] == location]
+            second_half_rating = second_half_data['rating'].mean() if not second_half_data.empty else None
+            
+            # Overall rating for this location
+            overall_rating = location_data['rating'].mean()
+            
+            # Calculate percentage change
+            if first_half_rating is not None and second_half_rating is not None and first_half_rating > 0:
+                percentage_change = ((second_half_rating - first_half_rating) / first_half_rating) * 100
+            else:
+                percentage_change = 0
+            
+            location_performance.append({
+                'Location': location,
+                'Overall_Rating': overall_rating,
+                'First_Half_Rating': first_half_rating,
+                'Second_Half_Rating': second_half_rating,
+                'Percentage_Change': percentage_change,
+                'Review_Count': len(location_data)
+            })
+        
+        # Convert to DataFrame for easier manipulation
+        performance_df = pd.DataFrame(location_performance)
+        
+        # Filter out locations with very few reviews to avoid misleading metrics
+        performance_df = performance_df[performance_df['Review_Count'] >= 3]
+        
+        if not performance_df.empty:
+            # Identify best-rated and least-rated locations
+            best_location = performance_df.loc[performance_df['Overall_Rating'].idxmax()]
+            least_location = performance_df.loc[performance_df['Overall_Rating'].idxmin()]
+            
+            # Display metrics
+            with l1:
+                best_delta = best_location['Percentage_Change']
+                delta_display = f"{best_delta:+.1f}%" if not pd.isna(best_delta) else "N/A"
+                st.metric(
+                    label="Best Rated Location",
+                    value=f"{best_location['Location'][:25]}..." if len(best_location['Location']) > 25 else best_location['Location'],
+                    delta=f"{delta_display} (Rating: {best_location['Overall_Rating']:.2f})"
+                )
 
-        # Calculate average ratings for start and end dates dynamically
-        def calculate_avg_rating(data, date_column, date_value):
-            return data[data[date_column] == date_value]['rating'].mean()
-
-        # Initialize lists to store the calculated values
-        avg_rating_start = []
-        avg_rating_end = []
-
-        for _, row in dynamic_dates.iterrows():
-            location_data = filtered_df[filtered_df['full_location'] == row['Location']]
-            avg_rating_start.append(calculate_avg_rating(location_data, 'review_date', row['Start_Date']))
-            avg_rating_end.append(calculate_avg_rating(location_data, 'review_date', row['End_Date']))
-
-        # Add the calculated ratings to the dynamic_dates DataFrame
-        dynamic_dates['Average_Rating_Start'] = avg_rating_start
-        dynamic_dates['Average_Rating_End'] = avg_rating_end
-
-        # Calculate delta
-        dynamic_dates['Delta'] = dynamic_dates['Average_Rating_End'] - dynamic_dates['Average_Rating_Start']
-
-        # Identify best-rated and least-rated locations based on end-date ratings
-        best_location = dynamic_dates.loc[dynamic_dates['Average_Rating_End'].idxmax()]
-        least_location = dynamic_dates.loc[dynamic_dates['Average_Rating_End'].idxmin()]
-
-        # Ensure deltas are positive for best-rated and negative for least-rated
-        best_location_delta = abs(best_location['Delta']) if not pd.isna(best_location['Delta']) else None
-        least_location_delta = -abs(least_location['Delta']) if not pd.isna(least_location['Delta']) else None
-
-        # Display metrics
-        with l1:
-            st.metric(
-                label="Best Rated Location",
-                value=f"{best_location['Location']}",
-                delta=f"{best_location_delta:.2f} (Overall Rating: {best_location['Average_Rating_End']:.2f})"
-                if best_location_delta is not None else None
-            )
-
-        with l2:
-            st.metric(
-                label="Least Rated Location",
-                value=f"{least_location['Location']}",
-                delta=f"{least_location_delta:.2f} (Overall Rating: {least_location['Average_Rating_End']:.2f})"
-                if least_location_delta is not None else None,
-            )
+            with l2:
+                least_delta = least_location['Percentage_Change'] 
+                delta_display = f"{least_delta:+.1f}%" if not pd.isna(least_delta) else "N/A"
+                st.metric(
+                    label="Least Rated Location",
+                    value=f"{least_location['Location'][:25]}..." if len(least_location['Location']) > 25 else least_location['Location'],
+                    delta=f"{delta_display} (Rating: {least_location['Overall_Rating']:.2f})"
+                )
+        else:
+            with l1:
+                st.metric(label="Best Rated Location", value="Insufficient Data")
+            with l2:
+                st.metric(label="Least Rated Location", value="Insufficient Data")
 
     else:
         st.warning("No data available for the selected timeline.")
 
     #### Charts ####
-    # col1, col2, col3 = st.columns(3)
-    #
-    # # CHART 1: Salon Rating Distribution
-    # category_counts = filtered_df['Rating'].value_counts().reset_index()
-    # category_counts.columns = ['rating', 'count']
-    # fig = px.pie(category_counts, names='rating', values='count', title='Salon Rating Distribution')
-    # col1.plotly_chart(fig, theme="streamlit")
-    #
-    # # CHART 2: User Rating Distribution
-    # category_counts = filtered_df['rating'].value_counts().reset_index()
-    # category_counts.columns = ['rating', 'count']
-    # fig = px.pie(category_counts, names='rating', values='count', title='User Rating Distribution')
-    # col2.plotly_chart(fig, theme="streamlit")
-    #
-    # # CHART 3: Sentiment Distribution
-    # valid_sentiments = ['Positive', 'Negative', 'Neutral', 'Mixed']
-    # sentiment_counts = filtered_df[filtered_df['sentiment'].isin(valid_sentiments)][
-    #     'sentiment'].value_counts().reset_index()
-    # sentiment_counts.columns = ['sentiment', 'count']
-    # fig = px.bar(sentiment_counts, x='sentiment', y='count', title='Sentiment Distribution', text='count')
-    # col3.plotly_chart(fig, theme="streamlit")
+    # Sentiment Distribution Chart
+    st.header("🤖 AI-Powered Customer Sentiment Analysis")
+    
+    if not filtered_df.empty:
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Sentiment Distribution Pie Chart
+            sentiment_dist = get_sentiment_distribution(filtered_df)
+            if not sentiment_dist.empty:
+                # Add colors for each sentiment
+                colors = {
+                    'Very Positive': '#0be881',  # Green
+                    'Positive': '#48dbfb',       # Light Blue
+                    'Neutral': '#feca57',        # Yellow
+                    'Negative': '#ff9ff3',       # Pink
+                    'Very Negative': '#ff6b6b'   # Red
+                }
+                
+                fig_pie = px.pie(
+                    sentiment_dist, 
+                    names='Sentiment', 
+                    values='Count',
+                    title='AI-Analyzed Customer Sentiment Distribution',
+                    color='Sentiment',
+                    color_discrete_map=colors
+                )
+                fig_pie.update_traces(textposition='inside', textinfo='percent+label')
+                st.plotly_chart(fig_pie, theme="streamlit", use_container_width=True)
+        
+        with col2:
+            # Sentiment vs Rating Correlation
+            if 'sentiment_score' in filtered_df.columns and 'rating' in filtered_df.columns:
+                # Create scatter plot showing correlation between sentiment score and rating
+                fig_scatter = px.scatter(
+                    filtered_df,
+                    x='rating',
+                    y='sentiment_score',
+                    color='sentiment_category',
+                    title='AI Sentiment Score vs Star Rating Correlation',
+                    labels={
+                        'rating': 'Star Rating (1-5)',
+                        'sentiment_score': 'AI Sentiment Score (1-5)',
+                        'sentiment_category': 'AI Sentiment Category'
+                    },
+                    color_discrete_map=colors
+                )
+                fig_scatter.update_layout(showlegend=True)
+                st.plotly_chart(fig_scatter, theme="streamlit", use_container_width=True)
+    else:
+        st.warning("No data available for sentiment analysis.")
 
     # Average Rating Trend Line Chart
     st.header("Average Rating Trend")
@@ -591,13 +714,67 @@ def main():
                             "username": "User Name",
                             "rating": "Rating ",
                             "id_review": "Review ID",
-                            "Name": "Salon Name"
+                            "Name": "Salon Name",
+                            "sentiment_category": "Sentiment",
+                            "sentiment_score": "Sentiment Score"
                             })
 
+    # Create sentiment display column with emoji
+    filtered_df['Sentiment Display'] = filtered_df['sentiment_emoji'] + " " + filtered_df['Sentiment']
+
+    # Create Google Maps Place Links using the Place ID (more reliable than individual review links)
+    filtered_df['Review Link'] = filtered_df['place_id'].apply(
+        lambda place_id: f"https://www.google.com/maps/place/?q=place_id:{place_id}" if pd.notna(place_id) else ""
+    )
 
     #### Filtered Table ####
     st.header("Customer Google Reviews")
-    st.dataframe(filtered_df[["Review ID", "Review Date", "Review", "Rating ", "User Name", "City", "Area", "Salon Name"]])
+    
+    # Method 1: Using pandas styling to highlight specific columns
+    def highlight_rating_column(s):
+        """Highlight the Rating column based on values"""
+        if s.name == 'Rating ':
+            # Color based on rating value
+            return ['background-color: #ff6b6b' if val <= 2 else 
+                   'background-color: #feca57' if val <= 3 else 
+                   'background-color: #48dbfb' if val <= 4 else
+                   'background-color: #0be881' for val in s]
+        elif s.name == 'Sentiment Score':
+            # Color based on sentiment score
+            return ['background-color: #ff6b6b' if val <= 2 else 
+                   'background-color: #feca57' if val <= 3 else 
+                   'background-color: #48dbfb' if val <= 4 else
+                   'background-color: #0be881' for val in s]
+        else:
+            return [''] * len(s)
+    
+    # Method 2: Highlight specific column with single color
+    def highlight_column(s):
+        """Highlight specific columns with colors"""
+        if s.name == 'Rating ':
+            return ['background-color: #fff3cd; color: #856404'] * len(s)
+        elif s.name == 'Review':
+            return ['background-color: #f8f9fa; font-style: italic'] * len(s)
+        elif s.name == 'Sentiment Display':
+            return ['background-color: #e8f5e8; font-weight: bold'] * len(s)
+        else:
+            return [''] * len(s)
+    
+    # Choose which styling to apply
+    display_df = filtered_df[["User Name", "Review", "Rating ", "Sentiment Display", "Sentiment Score", "Review Date", "Area", "City", "Review Link", "Review ID", "Salon Name"]]
+    
+    # Option 1: Rating and sentiment-based color coding
+    styled_df = display_df.style.apply(highlight_rating_column, axis=0)
+    
+    # Option 2: Simple column highlighting (uncomment to use instead)
+    # styled_df = display_df.style.apply(highlight_column, axis=0)
+    
+    # Option 3: Multiple column highlighting with different colors
+    # styled_df = (display_df.style
+    #              .apply(lambda x: ['background-color: #e8f5e8' if x.name == 'Rating ' else ''] * len(x), axis=0)
+    #              .apply(lambda x: ['background-color: #fff2e8' if x.name == 'Review' else ''] * len(x), axis=0))
+    
+    st.dataframe(styled_df, use_container_width=True)
 
     # Add BGorgeousSolutions trademark at the bottom of main app
     st.markdown("---")
