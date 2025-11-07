@@ -123,35 +123,37 @@ _sentiment_analyzer = None
 def get_sentiment_analyzer():
     """
     Initialize and cache the sentiment analysis model.
-    Uses a pre-trained BERT model optimized for sentiment analysis.
+    Uses a pre-trained model optimized for sentiment analysis.
     """
     global _sentiment_analyzer
     
     if _sentiment_analyzer is None:
         try:
-            # Use a robust sentiment analysis model
-            model_name = "cardiffnlp/twitter-roberta-base-sentiment-latest"
+            # Use lightweight model suitable for Streamlit Cloud memory limits
+            model_name = "distilbert-base-uncased-finetuned-sst-2-english"
             
             # Initialize the pipeline with error handling
             _sentiment_analyzer = pipeline(
                 "sentiment-analysis",
                 model=model_name,
-                tokenizer=model_name,
-                device=0 if torch.cuda.is_available() else -1,  # Use GPU if available
-                top_k=None  # Return all scores
+                device=-1  # Use CPU (Streamlit Cloud doesn't have GPU)
             )
+            print(f"✓ Successfully loaded AI model: {model_name}")
             
         except Exception as e:
-            # Silently try fallback model without showing warning to user
+            # Try even simpler fallback
+            print(f"Primary model failed: {str(e)}, trying minimal fallback...")
             try:
-                # Fallback to a smaller, more reliable model
+                # Minimal fallback
                 _sentiment_analyzer = pipeline(
                     "sentiment-analysis",
-                    model="distilbert-base-uncased-finetuned-sst-2-english",
-                    device=-1  # Use CPU
+                    model="nlptown/bert-base-multilingual-uncased-sentiment",
+                    device=-1
                 )
+                print("✓ Successfully loaded fallback AI model")
             except Exception as fallback_error:
-                # Only show error if both models fail
+                # Log the error but return None
+                print(f"Both models failed to load. Primary: {str(e)}, Fallback: {str(fallback_error)}")
                 return None
     
     return _sentiment_analyzer

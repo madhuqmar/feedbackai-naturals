@@ -286,26 +286,31 @@ def main():
     df = df[df["caption"].notna()]
     df['full_location'] = df['Area'] + " " + df['Name']
 
-    # Initialize AI sentiment analyzer (silently). If it fails, show a warning.
-    from app_utils import get_sentiment_analyzer
-    analyzer = get_sentiment_analyzer()
+    # Initialize AI sentiment analyzer with progress indicator
+    with st.spinner("🤖 Loading AI sentiment analysis model..."):
+        from app_utils import get_sentiment_analyzer
+        analyzer = get_sentiment_analyzer()
+        
     if analyzer is None:
         st.warning("⚠️ AI model unavailable, using rating-based fallback analysis.")
+    else:
+        st.success("✅ AI sentiment model loaded successfully!")
 
     # Run sentiment analysis (batch). Keep output minimal; only warn on failure.
-    try:
-        sentiment_categories, sentiment_scores, sentiment_emojis = analyze_sentiments_batch(
-            df, 'caption', 'rating', batch_size=16
-        )
-        df['sentiment_category'] = sentiment_categories
-        df['sentiment_score'] = sentiment_scores
-        df['sentiment_emoji'] = sentiment_emojis
-    except Exception as e:
-        st.warning(f"AI batch processing failed, falling back to individual analysis: {str(e)}")
-        sentiment_results = df.apply(lambda row: analyze_sentiment(row['caption'], row['rating']), axis=1)
-        df['sentiment_category'] = sentiment_results.apply(lambda x: x[0])
-        df['sentiment_score'] = sentiment_results.apply(lambda x: x[1])
-        df['sentiment_emoji'] = sentiment_results.apply(lambda x: x[2])
+    with st.spinner("🔍 Analyzing sentiment for all reviews..."):
+        try:
+            sentiment_categories, sentiment_scores, sentiment_emojis = analyze_sentiments_batch(
+                df, 'caption', 'rating', batch_size=16
+            )
+            df['sentiment_category'] = sentiment_categories
+            df['sentiment_score'] = sentiment_scores
+            df['sentiment_emoji'] = sentiment_emojis
+        except Exception as e:
+            st.warning(f"AI batch processing failed, falling back to individual analysis: {str(e)}")
+            sentiment_results = df.apply(lambda row: analyze_sentiment(row['caption'], row['rating']), axis=1)
+            df['sentiment_category'] = sentiment_results.apply(lambda x: x[0])
+            df['sentiment_score'] = sentiment_results.apply(lambda x: x[1])
+            df['sentiment_emoji'] = sentiment_results.apply(lambda x: x[2])
 
     # Helper function to get the day suffix (st, nd, rd, th)
     def get_day_suffix(day):
