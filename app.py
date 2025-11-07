@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 import plotly.express as px
 import os
-from app_utils import get_last_scraping_date, load_data, run_scraper, load_csv_from_s3, analyze_sentiment, calculate_overall_sentiment_score, get_sentiment_distribution, analyze_sentiments_batch
+from app_utils import get_last_scraping_date, load_data, run_scraper, load_csv_from_s3, calculate_overall_sentiment_score, get_sentiment_distribution
 from utils.st_paywall.aggregate_auth import add_auth
 import psutil
 
@@ -266,14 +266,25 @@ def main():
         st.error(f"Error loading location data: {str(e)}")
         return
 
+    # Try to load pre-computed sentiment data first
     bucket = 'gt-reviews'
-    key = 'combined/gt_kov_reviews.csv'
-    columns_to_load_2 = ["id_review", "caption", "review_date", "rating", "username", "place_id"]
-
-    reviews_df = load_csv_from_s3(bucket, key, columns_to_load_2)
+    key_with_sentiment = 'combined/gt_kov_reviews_with_sentiment.csv'
+    columns_with_sentiment = ["id_review", "caption", "review_date", "rating", "username", "place_id", 
+                              "sentiment_category", "sentiment_score", "sentiment_emoji"]
+    
+    # Try loading enriched data with sentiment
+    reviews_df = load_csv_from_s3(bucket, key_with_sentiment, columns_with_sentiment)
+    
+    # If enriched data doesn't exist, load original reviews
     if reviews_df.empty:
-        st.error("Failed to load reviews data. Please check your AWS configuration or local cache.")
-        return
+        st.info("💡 Loading original reviews. Run Step_3_genai_sentiment_analysis.ipynb to add AI sentiment.")
+        key = 'combined/gt_kov_reviews.csv'
+        columns_to_load_2 = ["id_review", "caption", "review_date", "rating", "username", "place_id"]
+        reviews_df = load_csv_from_s3(bucket, key, columns_to_load_2)
+        
+        if reviews_df.empty:
+            st.error("Failed to load reviews data. Please check your AWS configuration.")
+            return
 
     reviews_df['review_date'] = pd.to_datetime(reviews_df['review_date'], errors='coerce')
     last_date = reviews_df['review_date'].max()
@@ -286,31 +297,17 @@ def main():
     df = df[df["caption"].notna()]
     df['full_location'] = df['Area'] + " " + df['Name']
 
-    # Initialize AI sentiment analyzer with progress indicator
-    with st.spinner("🤖 Loading AI sentiment analysis model..."):
-        from app_utils import get_sentiment_analyzer
-        analyzer = get_sentiment_analyzer()
-        
-    if analyzer is None:
-        st.warning("⚠️ AI model unavailable, using rating-based fallback analysis.")
-    else:
-        st.success("✅ AI sentiment model loaded successfully!")
-
-    # Run sentiment analysis (batch). Keep output minimal; only warn on failure.
-    with st.spinner("🔍 Analyzing sentiment for all reviews..."):
-        try:
-            sentiment_categories, sentiment_scores, sentiment_emojis = analyze_sentiments_batch(
-                df, 'caption', 'rating', batch_size=16
-            )
-            df['sentiment_category'] = sentiment_categories
-            df['sentiment_score'] = sentiment_scores
-            df['sentiment_emoji'] = sentiment_emojis
-        except Exception as e:
-            st.warning(f"AI batch processing failed, falling back to individual analysis: {str(e)}")
-            sentiment_results = df.apply(lambda row: analyze_sentiment(row['caption'], row['rating']), axis=1)
-            df['sentiment_category'] = sentiment_results.apply(lambda x: x[0])
-            df['sentiment_score'] = sentiment_results.apply(lambda x: x[1])
-            df['sentiment_emoji'] = sentiment_results.apply(lambda x: x[2])
+    # Sentiment data is pre-computed in the pipeline (Step 3)
+    # No need to run AI models at runtime - just use the sentiment columns from S3
+    if 'sentiment_category' not in df.columns:
+        st.warning("⚠️ Sentiment data not found. Please run Step_3_genai_sentiment_analysis.ipynb pipeline first.")
+        # Fallback to rating-based sentiment
+        df['sentiment_category'] = df['rating'].apply(lambda r: 
+            "Very Positive" if r >= 5 else "Positive" if r >= 4 else 
+            "Neutral" if r >= 3 else "Negative" if r >= 2 else "Very Negative")
+        df['sentiment_score'] = df['rating']
+        df['sentiment_emoji'] = df['rating'].apply(lambda r: 
+            "😍" if r >= 5 else "😊" if r >= 4 else "😐" if r >= 3 else "😞" if r >= 2 else "😡")
 
     # Helper function to get the day suffix (st, nd, rd, th)
     def get_day_suffix(day):

@@ -6,8 +6,6 @@ import io
 import streamlit as st
 import re
 import numpy as np
-from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification
-import torch
 
 def load_csv_from_s3(bucket, key, columns=None):
     """
