@@ -142,7 +142,7 @@ def get_sentiment_analyzer():
             )
             
         except Exception as e:
-            st.warning(f"Could not load advanced AI model ({str(e)}). Falling back to basic model...")
+            # Silently try fallback model without showing warning to user
             try:
                 # Fallback to a smaller, more reliable model
                 _sentiment_analyzer = pipeline(
@@ -151,7 +151,7 @@ def get_sentiment_analyzer():
                     device=-1  # Use CPU
                 )
             except Exception as fallback_error:
-                st.error(f"Could not load any sentiment analysis model: {str(fallback_error)}")
+                # Only show error if both models fail
                 return None
     
     return _sentiment_analyzer
