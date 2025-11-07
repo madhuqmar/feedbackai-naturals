@@ -10,25 +10,41 @@ from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassifica
 import torch
 
 def load_csv_from_s3(bucket, key, columns=None):
+    """
+    Load CSV from S3 with multiple fallback options.
+    """
+    try:
+        # Try using Streamlit secrets first
+        if hasattr(st, 'secrets') and "AWS_ACCESS_KEY_ID" in st.secrets:
+            aws_access_key_id = st.secrets["AWS_ACCESS_KEY_ID"]
+            aws_secret_access_key = st.secrets["AWS_SECRET_ACCESS_KEY"]
+            region_name = st.secrets.get("AWS_DEFAULT_REGION", "us-east-2")
+            
+            s3 = boto3.client(
+                's3',
+                aws_access_key_id=aws_access_key_id,
+                aws_secret_access_key=aws_secret_access_key,
+                region_name=region_name
+            )
+        else:
+            # Fallback to default profile
+            session = boto3.Session(profile_name="default", region_name="us-east-2")
+            s3 = session.client("s3")
 
-    # Read secrets from Streamlit secrets
-    # aws_access_key_id = st.secrets["AWS_ACCESS_KEY_ID"]
-    # aws_secret_access_key = st.secrets["AWS_SECRET_ACCESS_KEY"]
-    # region_name = st.secrets.get("AWS_DEFAULT_REGION", "us-east-1")
-
-    # s3 = boto3.client(
-    #     's3',
-    #     aws_access_key_id=aws_access_key_id,
-    #     aws_secret_access_key=aws_secret_access_key,
-    #     region_name=region_name
-    # )
-
-    session = boto3.Session(profile_name="default", region_name="us-east-2")
-    s3 = session.client("s3")
-
-    response = s3.get_object(Bucket=bucket, Key=key)
-    df = pd.read_csv(response['Body'], usecols=columns)
-    return df
+        response = s3.get_object(Bucket=bucket, Key=key)
+        df = pd.read_csv(response['Body'], usecols=columns)
+        return df
+    except Exception as e:
+        st.error(f"Error loading data from S3: {str(e)}")
+        st.info("💡 Attempting to load from local cache if available...")
+        # Try to load from local cache
+        cache_path = f"data/{key.split('/')[-1]}"
+        if os.path.exists(cache_path):
+            st.success(f"Loading from local cache: {cache_path}")
+            return pd.read_csv(cache_path, usecols=columns)
+        else:
+            st.error("No local cache available. Please check AWS credentials.")
+            return pd.DataFrame()
 
 
 

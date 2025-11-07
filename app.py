@@ -11,8 +11,7 @@ import psutil
 ### APP HEADERS ###
 st.set_page_config(layout="wide")
 
-logo_path_1 = "images/naturals_logo.png"
-logo_path_2 = "images/naturals_signature.png"
+logo_path_1 = "images/gt_logo.png"
 
 def get_memory_usage():
     process = psutil.Process(os.getpid())
@@ -232,7 +231,7 @@ if st.sidebar.button("🚪 Logout", type="secondary"):
 st.sidebar.markdown("---")
 
 # Create three columns with ratios (4:1:1 works well for title + two logos)
-col1, col2, col3 = st.columns([4, 1, 1])
+col1, col2 = st.columns([4, 1])
 
 # Add title to the left column
 with col1:
@@ -250,25 +249,32 @@ with col1:
 with col2:
     st.image(logo_path_1)
 
-# Add the second logo to the third column
-with col3:
-    st.image(logo_path_2)
-
 ### MAIN APPLICATION ###
 def main():
 
-    # Load data from specified location
-    file_path_1 = "data/naturals_chennai_locations_metadata.csv"
-    columns_to_load_1 = ["Place ID", "City Area", "Area", "Name", "City", "Rating", "Total Reviews", "Address"]  # Replace with actual column names you need
-    ratings_df = load_data(file_path_1, columns=columns_to_load_1)
-    ratings_df = load_data(file_path_1)
-    ratings_df.rename(columns={"Place ID": "place_id"}, inplace=True)
+    # Single startup status message (keep only one status as requested)
+    st.info("📂 Loading data...")
 
-    bucket = 'naturals-reviews'
-    key = 'combined/all_4_naturals_salons.csv'
+    # Load data from specified location
+    file_path_1 = "data/gt_chennai_locations_metadata.csv"
+    columns_to_load_1 = ["Place ID", "City Area", "Area", "Name", "City", "Rating", "Total Reviews", "Address"]  # Replace with actual column names you need
+    try:
+        ratings_df = load_data(file_path_1, columns=columns_to_load_1)
+        ratings_df = load_data(file_path_1)
+        ratings_df.rename(columns={"Place ID": "place_id"}, inplace=True)
+    except Exception as e:
+        st.error(f"Error loading location data: {str(e)}")
+        return
+
+    bucket = 'gt-reviews'
+    key = 'combined/gt_kov_reviews.csv'
     columns_to_load_2 = ["id_review", "caption", "review_date", "rating", "username", "place_id"]
 
-    reviews_df = load_csv_from_s3(bucket, key, columns=columns_to_load_2)
+    reviews_df = load_csv_from_s3(bucket, key, columns_to_load_2)
+    if reviews_df.empty:
+        st.error("Failed to load reviews data. Please check your AWS configuration or local cache.")
+        return
+
     reviews_df['review_date'] = pd.to_datetime(reviews_df['review_date'], errors='coerce')
     last_date = reviews_df['review_date'].max()
 
@@ -280,56 +286,26 @@ def main():
     df = df[df["caption"].notna()]
     df['full_location'] = df['Area'] + " " + df['Name']
 
-    # Add sentiment analysis
-    st.info("🤖 Initializing AI-powered sentiment analysis using advanced transformer models...")
-    
-    with st.spinner("Loading AI sentiment analysis model (first-time setup may take 1-2 minutes)..."):
-        # Test if the AI model loads successfully
-        from app_utils import get_sentiment_analyzer
-        analyzer = get_sentiment_analyzer()
-        
-        if analyzer is not None:
-            st.success("✅ AI sentiment model loaded successfully!")
-        else:
-            st.warning("⚠️ AI model unavailable, using rating-based fallback analysis.")
-    
-    # Progress bar for sentiment analysis
-    progress_bar = st.progress(0)
-    status_text = st.empty()
-    
-    with st.spinner("Analyzing customer sentiment with AI for all reviews..."):
-        try:
-            # Use batch processing for better performance
-            status_text.text("Processing reviews with AI sentiment analysis...")
-            sentiment_categories, sentiment_scores, sentiment_emojis = analyze_sentiments_batch(
-                df, 'caption', 'rating', batch_size=16
-            )
-            
-            df['sentiment_category'] = sentiment_categories
-            df['sentiment_score'] = sentiment_scores
-            df['sentiment_emoji'] = sentiment_emojis
-            
-            progress_bar.progress(1.0)
-            status_text.text("AI sentiment analysis completed!")
-            
-        except Exception as e:
-            st.warning(f"Batch processing failed, using individual analysis: {str(e)}")
-            # Fallback to individual processing
-            sentiment_results = df.apply(lambda row: analyze_sentiment(row['caption'], row['rating']), axis=1)
-            df['sentiment_category'] = sentiment_results.apply(lambda x: x[0])
-            df['sentiment_score'] = sentiment_results.apply(lambda x: x[1])
-            df['sentiment_emoji'] = sentiment_results.apply(lambda x: x[2])
-    
-    # Clear progress indicators
-    progress_bar.empty()
-    status_text.empty()
-    
-    st.success("🎯 AI-powered sentiment analysis completed! Enhanced accuracy with deep learning models.")
+    # Initialize AI sentiment analyzer (silently). If it fails, show a warning.
+    from app_utils import get_sentiment_analyzer
+    analyzer = get_sentiment_analyzer()
+    if analyzer is None:
+        st.warning("⚠️ AI model unavailable, using rating-based fallback analysis.")
 
-    if not ratings_df.empty and not reviews_df.empty:
-        st.success("Data loaded successfully!")
-    else:
-        st.warning("The file is empty or has an unexpected format. Please check the file.")
+    # Run sentiment analysis (batch). Keep output minimal; only warn on failure.
+    try:
+        sentiment_categories, sentiment_scores, sentiment_emojis = analyze_sentiments_batch(
+            df, 'caption', 'rating', batch_size=16
+        )
+        df['sentiment_category'] = sentiment_categories
+        df['sentiment_score'] = sentiment_scores
+        df['sentiment_emoji'] = sentiment_emojis
+    except Exception as e:
+        st.warning(f"AI batch processing failed, falling back to individual analysis: {str(e)}")
+        sentiment_results = df.apply(lambda row: analyze_sentiment(row['caption'], row['rating']), axis=1)
+        df['sentiment_category'] = sentiment_results.apply(lambda x: x[0])
+        df['sentiment_score'] = sentiment_results.apply(lambda x: x[1])
+        df['sentiment_emoji'] = sentiment_results.apply(lambda x: x[2])
 
     # Helper function to get the day suffix (st, nd, rd, th)
     def get_day_suffix(day):
